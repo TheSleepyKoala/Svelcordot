@@ -15,6 +15,28 @@
           const originalFetch = window.fetch;
     
           window.fetch = (input, init) => {
+            // Do not override well-formed absolute urls
+            if (input.includes(".proxy/")) {
+                return originalFetch(input, init).then((response) => {
+                    // Godot insists on decompressing the body if it contains a Content-Encoding: gzip header.
+                    // Apparently the Discord proxy decompresses them for us but leaves the header intact...
+                    if (response.headers.get("Content-Encoding") == "gzip") {
+                        // Response headers are immutable, so we need to create a new Response
+                        var status = response.status;
+                        var statusText = response.statusText;
+                        var headers = new Headers();
+                        for (const h of response.headers.entries()) {
+                            if (h[0] != "Content-Encoding" && h[0] != "content-encoding") {
+                                headers.append(h[0], h[1]);
+                            }
+                        }
+                        return new Response(response.body, {status, statusText, headers});
+                    }
+                    
+                    return response;
+                });
+            }
+            
             // Use the saved original fetch function inside the redefined one
             return originalFetch(".proxy/" + input, init);
           };
